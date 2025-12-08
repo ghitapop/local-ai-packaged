@@ -35,10 +35,10 @@ if ($LASTEXITCODE -eq 0) {
     Remove-Item $BackupFile
 
     $BackupSize = (Get-Item "$BackupFile.zip").Length / 1MB
-    Write-Host "✓ Full backup created: $BackupFile.zip" -ForegroundColor Green
+    Write-Host "[SUCCESS] Full backup created: $BackupFile.zip" -ForegroundColor Green
     Write-Host "  Backup size: $([math]::Round($BackupSize, 2)) MB"
 } else {
-    Write-Host "✗ Backup failed!" -ForegroundColor Red
+    Write-Host "[FAILED] Backup failed!" -ForegroundColor Red
     exit 1
 }
 
@@ -46,7 +46,7 @@ if ($LASTEXITCODE -eq 0) {
 Write-Host "Cleaning up backups older than $RetentionDays days..."
 $CutoffDate = (Get-Date).AddDays(-$RetentionDays)
 Get-ChildItem -Path $BackupDir -Filter "*.zip" | Where-Object { $_.LastWriteTime -lt $CutoffDate } | Remove-Item
-Write-Host "✓ Cleanup complete" -ForegroundColor Green
+Write-Host "[SUCCESS] Cleanup complete" -ForegroundColor Green
 
 # List recent backups
 Write-Host ""

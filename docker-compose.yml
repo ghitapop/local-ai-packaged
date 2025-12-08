@@ -82,6 +82,7 @@ services:
         - LOG_LEVEL=${FLOWISE_LOG_LEVEL}
         - BLOB_STORAGE_PATH=${FLOWISE_BLOB_STORAGE_PATH}
         - NODE_ENV=production
+        - NODE_OPTIONS=--max-old-space-size=448
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -241,7 +242,7 @@ services:
       LANGFUSE_INGESTION_CLICKHOUSE_WRITE_INTERVAL_MS: ${LANGFUSE_INGESTION_CLICKHOUSE_WRITE_INTERVAL_MS:-}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_AUTH: ${REDIS_AUTH:-LOCALONLYREDIS}
+      REDIS_AUTH: ${REDIS_AUTH:-}
       REDIS_TLS_ENABLED: ${REDIS_TLS_ENABLED:-false}
       REDIS_TLS_CA: ${REDIS_TLS_CA:-/certs/ca.crt}
       REDIS_TLS_CERT: ${REDIS_TLS_CERT:-/certs/redis.crt}
@@ -335,7 +336,7 @@ services:
   redis:
     container_name: redis
     image: docker.io/valkey/valkey:8-alpine
-    command: valkey-server --save 30 1 --loglevel warning
+    command: valkey-server --save 30 1 --loglevel warning --maxmemory-policy noeviction
     restart: unless-stopped
     expose:
       - 6379/tcp
