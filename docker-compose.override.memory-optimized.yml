@@ -1,0 +1,160 @@
+# Docker Compose Override for Memory Optimization
+# This file adds memory limits to all services to reduce RAM usage
+# Usage: python start_services.py --profile <profile> --memory-optimized
+
+# Override Ollama services with memory limits
+x-ollama-memory: &ollama-memory-limits
+  deploy:
+    resources:
+      limits:
+        memory: 8G
+      reservations:
+        memory: 4G
+
+services:
+  # Critical Services - Highest Memory Impact
+
+  ollama-gpu:
+    <<: *ollama-memory-limits
+    environment:
+      - OLLAMA_CONTEXT_LENGTH=4096  # Reduced from 8192 to save memory
+      - OLLAMA_FLASH_ATTENTION=1
+      - OLLAMA_KV_CACHE_TYPE=q8_0
+      - OLLAMA_MAX_LOADED_MODELS=1  # Reduced from 2 to save memory
+
+  ollama-cpu:
+    <<: *ollama-memory-limits
+    environment:
+      - OLLAMA_CONTEXT_LENGTH=4096  # Reduced from 8192
+      - OLLAMA_FLASH_ATTENTION=1
+      - OLLAMA_KV_CACHE_TYPE=q8_0
+      - OLLAMA_MAX_LOADED_MODELS=1  # Reduced from 2
+
+  ollama-gpu-amd:
+    <<: *ollama-memory-limits
+    environment:
+      - OLLAMA_CONTEXT_LENGTH=4096  # Reduced from 8192
+      - OLLAMA_FLASH_ATTENTION=1
+      - OLLAMA_KV_CACHE_TYPE=q8_0
+      - OLLAMA_MAX_LOADED_MODELS=1  # Reduced from 2
+
+  postgres:
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+    environment:
+      - POSTGRES_SHARED_BUFFERS=1GB
+      - POSTGRES_EFFECTIVE_CACHE_SIZE=2GB
+
+  clickhouse:
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+        reservations:
+          memory: 1G
+
+  searxng:
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    environment:
+      - SEARXNG_UWSGI_WORKERS=2  # Reduced from 4
+      - SEARXNG_UWSGI_THREADS=2  # Reduced from 4
+
+  # Moderate Priority Services
+
+  neo4j:
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  langfuse-web:
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+
+  langfuse-worker:
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+
+  redis:
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    command: valkey-server --save 30 1 --loglevel warning --maxmemory 400mb --maxmemory-policy allkeys-lru
+
+  # Light Services - 512MB each
+
+  n8n:
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  n8n-import:
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  flowise:
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  open-webui:
+    deploy:
+      resources:
+        limits:
+          memory: 1536M  # Increased from 512M due to high usage
+
+  minio:
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  caddy:
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  qdrant:
+    deploy:
+      resources:
+        limits:
+          memory: 1536M  # Increased from 512M due to high usage
+
+  # Very Light Services
+
+  ollama-pull-llama-cpu:
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  ollama-pull-llama-gpu:
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  ollama-pull-llama-gpu-amd:
+    deploy:
+      resources:
+        limits:
+          memory: 256M

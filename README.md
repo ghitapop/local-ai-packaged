@@ -2,13 +2,14 @@
 
 **Self-hosted AI Package** is an open, docker compose template that
 quickly bootstraps a fully featured Local AI and Low Code development
-environment including Ollama for your local LLMs, Open WebUI for an interface to chat with your N8N agents, and Supabase for your database, vector store, and authentication. 
+environment including Ollama for your local LLMs, Open WebUI for an interface to chat with your N8N agents, and PostgreSQL with pgvector for your database and vector store.
 
-This is Cole's version with a couple of improvements and the addition of Supabase, Open WebUI, Flowise, Neo4j, Langfuse, SearXNG, and Caddy!
-Also, the local RAG AI Agent workflows from the video will be automatically in your 
+This is Cole's version with a couple of improvements and the addition of PostgreSQL, Open WebUI, Flowise, Neo4j, Langfuse, SearXNG, and Caddy!
+Also, the local RAG AI Agent workflows from the video will be automatically in your
 n8n instance if you use this setup instead of the base one provided by n8n!
 
-**IMPORANT**: Supabase has updated a couple environment variables so you may have to add some new default values in your .env that I have in my .env.example if you have had this project up and running already and are just pulling new changes. Specifically, you need to add "POOLER_DB_POOL_SIZE=5" to your .env. This is required if you have had the package running before June 14th.
+> [!IMPORTANT]
+> **Migrating from Supabase?** This project has been simplified to use PostgreSQL instead of the full Supabase stack. See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for migration instructions.
 
 ## Important Links
 
@@ -31,8 +32,7 @@ quickly get started with building self-hosted AI workflows.
 ✅ [**Self-hosted n8n**](https://n8n.io/) - Low-code platform with over 400
 integrations and advanced AI components
 
-✅ [**Supabase**](https://supabase.com/) - Open source database as a service -
-most widely used database for AI agents
+✅ [**PostgreSQL with pgvector**](https://github.com/pgvector/pgvector) - Reliable, open-source database with vector similarity search for RAG applications
 
 ✅ [**Ollama**](https://ollama.com/) - Cross-platform LLM platform to install
 and run the latest local LLMs
@@ -44,8 +44,7 @@ privately interact with your local models and N8N agents
 builder that pairs very well with n8n
 
 ✅ [**Qdrant**](https://qdrant.tech/) - Open source, high performance vector
-store with an comprehensive API. Even though you can use Supabase for RAG, this was
-kept unlike Postgres since it's faster than Supabase so sometimes is the better option.
+store with an comprehensive API. Provides an alternative to PostgreSQL's pgvector for specialized vector workloads.
 
 ✅ [**Neo4j**](https://neo4j.com/) - Knowledge graph engine that powers tools like GraphRAG, LightRAG, and Graphiti 
 
@@ -72,7 +71,7 @@ git clone -b stable https://github.com/coleam00/local-ai-packaged.git
 cd local-ai-packaged
 ```
 
-Before running the services, you need to set up your environment variables for Supabase following their [self-hosting guide](https://supabase.com/docs/guides/self-hosting/docker#securing-your-services).
+Before running the services, you need to set up your environment variables.
 
 1. Make a copy of `.env.example` and rename it to `.env` in the root directory of the project
 2. Set the following required environment variables:
@@ -84,34 +83,32 @@ Before running the services, you need to set up your environment variables for S
    N8N_USER_MANAGEMENT_JWT_SECRET=
 
    ############
-   # Supabase Secrets
+   # PostgreSQL Database
    ############
+   POSTGRES_USER=postgres
    POSTGRES_PASSWORD=
-   JWT_SECRET=
-   ANON_KEY=
-   SERVICE_ROLE_KEY=
-   DASHBOARD_USERNAME=
-   DASHBOARD_PASSWORD=
-   POOLER_TENANT_ID=
+   POSTGRES_DB=postgres
+
+   # Optional: Create additional databases (comma-separated)
+   # POSTGRES_ADDITIONAL_DBS=n8n_db,flowise_db,langfuse_db,your_app_db
 
    ############
    # Neo4j Secrets
-   ############   
+   ############
    NEO4J_AUTH=
 
    ############
    # Langfuse credentials
    ############
-
    CLICKHOUSE_PASSWORD=
    MINIO_ROOT_PASSWORD=
    LANGFUSE_SALT=
    NEXTAUTH_SECRET=
-   ENCRYPTION_KEY=  
+   ENCRYPTION_KEY=
    ```
 
 > [!IMPORTANT]
-> Make sure to generate secure random values for all secrets. Never use the example values in production.
+> Make sure to generate secure random values for all secrets. Use `openssl rand -hex 32` to generate strong keys. Never use the example values in production.
 
 3. Set the following environment variables if deploying to production, otherwise leave commented:
    ```bash
@@ -120,18 +117,18 @@ Before running the services, you need to set up your environment variables for S
    ############
 
    N8N_HOSTNAME=n8n.yourdomain.com
-   WEBUI_HOSTNAME=:openwebui.yourdomain.com
-   FLOWISE_HOSTNAME=:flowise.yourdomain.com
-   SUPABASE_HOSTNAME=:supabase.yourdomain.com
-   OLLAMA_HOSTNAME=:ollama.yourdomain.com
+   WEBUI_HOSTNAME=openwebui.yourdomain.com
+   FLOWISE_HOSTNAME=flowise.yourdomain.com
+   LANGFUSE_HOSTNAME=langfuse.yourdomain.com
+   OLLAMA_HOSTNAME=ollama.yourdomain.com
    SEARXNG_HOSTNAME=searxng.yourdomain.com
    NEO4J_HOSTNAME=neo4j.yourdomain.com
    LETSENCRYPT_EMAIL=your-email-address
-   ```   
+   ```
 
 ---
 
-The project includes a `start_services.py` script that handles starting both the Supabase and local AI services. The script accepts a `--profile` flag to specify which GPU configuration to use.
+The project includes a `start_services.py` script that handles starting all AI services with proper initialization. The script accepts a `--profile` flag to specify which GPU configuration to use.
 
 ### For Nvidia GPU users
 
@@ -250,30 +247,29 @@ pre-configured with network and disk so there isn’t much else you need to
 install. After completing the installation steps above, follow the steps below
 to get started.
 
-1. Open <http://localhost:5678/> in your browser to set up n8n. You’ll only
+1. Open <http://localhost:5678/> in your browser to set up n8n. You'll only
    have to do this once. You are NOT creating an account with n8n in the setup here,
    it is only a local account for your instance!
 2. Open the included workflow:
    <http://localhost:5678/workflow/vTN9y2dLXqTiDfPT>
 3. Create credentials for every service:
-   
-   Ollama URL: http://ollama:11434
 
-   Postgres (through Supabase): use DB, username, and password from .env. IMPORTANT: Host is 'db'
-   Since that is the name of the service running Supabase
+   **Ollama**: URL is `http://ollama:11434`
 
-   Qdrant URL: http://qdrant:6333 (API key can be whatever since this is running locally)
+   **PostgreSQL**: Host is `postgres`, database, username, and password from your `.env` file
 
-   Google Drive: Follow [this guide from n8n](https://docs.n8n.io/integrations/builtin/credentials/google/).
+   **Qdrant**: URL is `http://qdrant:6333` (API key can be whatever since this is running locally)
+
+   **Google Drive** (optional): Follow [this guide from n8n](https://docs.n8n.io/integrations/builtin/credentials/google/).
    Don't use localhost for the redirect URI, just use another domain you have, it will still work!
    Alternatively, you can set up [local file triggers](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.localfiletrigger/).
 4. Select **Test workflow** to start running the workflow.
-5. If this is the first time you’re running the workflow, you may need to wait
-   until Ollama finishes downloading Llama3.1. You can inspect the docker
-   console logs to check on the progress.
+5. If this is the first time you're running the workflow, you may need to wait
+   until Ollama finishes downloading the default model (qwen2.5:7b). You can inspect the docker
+   console logs to check on the progress: `docker logs ollama-pull-llama`
 6. Make sure to toggle the workflow as active and copy the "Production" webhook URL!
-7. Open <http://localhost:3000/> in your browser to set up Open WebUI.
-You’ll only have to do this once. You are NOT creating an account with Open WebUI in the 
+7. Open <http://localhost:8080/> in your browser to set up Open WebUI.
+You'll only have to do this once. You are NOT creating an account with Open WebUI in the
 setup here, it is only a local account for your instance!
 8. Go to Workspace -> Functions -> Add Function -> Give name + description then paste in
 the code from `n8n_pipe.py`
@@ -282,10 +278,15 @@ the code from `n8n_pipe.py`
 
 9. Click on the gear icon and set the n8n_url to the production URL for the webhook
 you copied in a previous step.
-10. Toggle the function on and now it will be available in your model dropdown in the top left! 
+10. Toggle the function on and now it will be available in your model dropdown in the top left!
 
-To open n8n at any time, visit <http://localhost:5678/> in your browser.
-To open Open WebUI at any time, visit <http://localhost:3000/>.
+**Service URLs** (when running in private/development mode):
+- **n8n**: <http://localhost:5678/>
+- **Open WebUI**: <http://localhost:8080/>
+- **Flowise**: <http://localhost:3001/>
+- **Langfuse**: <http://localhost:3000/>
+- **Neo4j Browser**: <http://localhost:7474/>
+- **PostgreSQL**: `localhost:5432` (connect with any PostgreSQL client)
 
 With your n8n instance, you’ll have access to over 400 integrations and a
 suite of basic and advanced AI nodes such as
@@ -320,23 +321,76 @@ Replace `<your-profile>` with one of: `cpu`, `gpu-nvidia`, `gpu-amd`, or `none`.
 
 Note: The `start_services.py` script itself does not update containers - it only restarts them or pulls them if you are downloading these containers for the first time. To get the latest versions, you must explicitly run the commands above.
 
+## Database Backups
+
+The project includes automated backup scripts for PostgreSQL. Regular backups are **strongly recommended** to protect your data.
+
+### Creating Backups
+
+**Linux/Mac**:
+```bash
+# Make script executable (first time only)
+chmod +x backup-postgres.sh
+
+# Run backup manually
+./backup-postgres.sh
+
+# Or set up automated daily backups with cron
+crontab -e
+# Add this line to run daily at 2 AM:
+# 0 2 * * * /path/to/local-ai-packaged/backup-postgres.sh
+```
+
+**Windows (PowerShell)**:
+```powershell
+# Run backup manually
+.\backup-postgres.ps1
+
+# Or set up via Task Scheduler for automated daily backups
+```
+
+Backups are saved to `./backups/postgres/` and kept for 7 days by default.
+
+### Restoring from Backup
+
+**Linux/Mac**:
+```bash
+./restore-postgres.sh ./backups/postgres/full_backup_YYYYMMDD_HHMMSS.sql.gz
+```
+
+**Manual restore**:
+```bash
+# Restore all databases
+cat backup.sql | docker exec -i postgres psql -U postgres
+
+# Or restore specific database
+cat backup.sql | docker exec -i postgres psql -U postgres -d database_name
+```
+
 ## Troubleshooting
 
 Here are solutions to common issues you might encounter:
 
-### Supabase Issues
+### Database Issues
 
-- **Supabase Pooler Restarting**: If the supabase-pooler container keeps restarting itself, follow the instructions in [this GitHub issue](https://github.com/supabase/supabase/issues/30210#issuecomment-2456955578).
+- **PostgreSQL won't start**: Check logs with `docker logs postgres`. If initialization failed, you may need to delete the volume and restart:
+  ```bash
+  docker compose -p localai down
+  docker volume rm localai_postgres_data
+  python start_services.py --profile <your-profile>
+  ```
 
-- **Supabase Analytics Startup Failure**: If the supabase-analytics container fails to start after changing your Postgres password, delete the folder `supabase/docker/volumes/db/data`.
+- **Can't connect to PostgreSQL from host**: Make sure you're running in private mode (default) which exposes port 5432. Check with `docker compose -p localai ps postgres`
 
-- **If using Docker Desktop**: Go into the Docker settings and make sure "Expose daemon on tcp://localhost:2375 without TLS" is turned on
+- **Services can't connect to database**: Services should use host `postgres` (not `localhost` or `db`). Check service logs: `docker logs <service-name>`
 
-- **Supabase Service Unavailable** - Make sure you don't have an "@" character in your Postgres password! If the connection to the kong container is working (the container logs say it is receiving requests from n8n) but n8n says it cannot connect, this is generally the problem from what the community has shared. Other characters might not be allowed too, the @ symbol is just the one I know for sure!
+### General Issues
 
-- **SearXNG Restarting**: If the SearXNG container keeps restarting, run the command "chmod 755 searxng" within the local-ai-packaged folder so SearXNG has the permissions it needs to create the uwsgi.ini file.
+- **Docker Desktop**: Go into the Docker settings and make sure "Expose daemon on tcp://localhost:2375 without TLS" is turned on
 
-- **Files not Found in Supabase Folder** - If you get any errors around files missing in the supabase/ folder like .env, docker/docker-compose.yml, etc. this most likely means you had a "bad" pull of the Supabase GitHub repository when you ran the start_services.py script. Delete the supabase/ folder within the Local AI Package folder entirely and try again.
+- **SearXNG Restarting**: If the SearXNG container keeps restarting, run the command `chmod 755 searxng` within the local-ai-packaged folder so SearXNG has the permissions it needs to create the uwsgi.ini file.
+
+- **Port conflicts**: If you get port conflict errors, make sure no other services are running on ports 5432, 5678, 8080, etc.
 
 ### GPU Support Issues
 

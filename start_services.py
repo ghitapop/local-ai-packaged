@@ -2,14 +2,11 @@
 """
 start_services.py
 
-This script starts the Supabase stack first, waits for it to initialize, and then starts
-the local AI stack. Both stacks use the same Docker Compose project name ("localai")
-so they appear together in Docker Desktop.
+This script starts the local AI stack with proper initialization for all services.
 """
 
 import os
 import subprocess
-import shutil
 import time
 import argparse
 import platform
@@ -20,52 +17,20 @@ def run_command(cmd, cwd=None):
     print("Running:", " ".join(cmd))
     subprocess.run(cmd, cwd=cwd, check=True)
 
-def clone_supabase_repo():
-    """Clone the Supabase repository using sparse checkout if not already present."""
-    if not os.path.exists("supabase"):
-        print("Cloning the Supabase repository...")
-        run_command([
-            "git", "clone", "--filter=blob:none", "--no-checkout",
-            "https://github.com/supabase/supabase.git"
-        ])
-        os.chdir("supabase")
-        run_command(["git", "sparse-checkout", "init", "--cone"])
-        run_command(["git", "sparse-checkout", "set", "docker"])
-        run_command(["git", "checkout", "master"])
-        os.chdir("..")
-    else:
-        print("Supabase repository already exists, updating...")
-        os.chdir("supabase")
-        run_command(["git", "pull"])
-        os.chdir("..")
-
-def prepare_supabase_env():
-    """Copy .env to .env in supabase/docker."""
-    env_path = os.path.join("supabase", "docker", ".env")
-    env_example_path = os.path.join(".env")
-    print("Copying .env in root to .env in supabase/docker...")
-    shutil.copyfile(env_example_path, env_path)
-
 def stop_existing_containers(profile=None):
-    print("Stopping and removing existing containers for the unified project 'localai'...")
+    """Stop and remove existing containers."""
+    print("Stopping and removing existing containers for project 'localai'...")
     cmd = ["docker", "compose", "-p", "localai"]
     if profile and profile != "none":
         cmd.extend(["--profile", profile])
     cmd.extend(["-f", "docker-compose.yml", "down"])
     run_command(cmd)
 
-def start_supabase(environment=None):
-    """Start the Supabase services (using its compose file)."""
-    print("Starting Supabase services...")
-    cmd = ["docker", "compose", "-p", "localai", "-f", "supabase/docker/docker-compose.yml"]
-    if environment and environment == "public":
-        cmd.extend(["-f", "docker-compose.override.public.supabase.yml"])
-    cmd.extend(["up", "-d"])
-    run_command(cmd)
-
-def start_local_ai(profile=None, environment=None):
-    """Start the local AI services (using its compose file)."""
+def start_services(profile=None, environment=None, memory_optimized=False):
+    """Start all local AI services."""
     print("Starting local AI services...")
+    if memory_optimized:
+        print("Memory optimization enabled - applying resource limits")
     cmd = ["docker", "compose", "-p", "localai"]
     if profile and profile != "none":
         cmd.extend(["--profile", profile])
@@ -74,6 +39,8 @@ def start_local_ai(profile=None, environment=None):
         cmd.extend(["-f", "docker-compose.override.private.yml"])
     if environment and environment == "public":
         cmd.extend(["-f", "docker-compose.override.public.yml"])
+    if memory_optimized:
+        cmd.extend(["-f", "docker-compose.override.memory-optimized.yml"])
     cmd.extend(["up", "-d"])
     run_command(cmd)
 
@@ -218,31 +185,43 @@ def check_and_fix_docker_compose_for_searxng():
         print(f"Error checking/modifying docker-compose.yml for SearXNG: {e}")
 
 def main():
-    parser = argparse.ArgumentParser(description='Start the local AI and Supabase services.')
+    parser = argparse.ArgumentParser(description='Start the local AI services.')
     parser.add_argument('--profile', choices=['cpu', 'gpu-nvidia', 'gpu-amd', 'none'], default='cpu',
                       help='Profile to use for Docker Compose (default: cpu)')
     parser.add_argument('--environment', choices=['private', 'public'], default='private',
                       help='Environment to use for Docker Compose (default: private)')
+    parser.add_argument('--memory-optimized', action='store_true',
+                      help='Apply memory limits to reduce RAM usage (recommended for systems with limited memory)')
     args = parser.parse_args()
-
-    clone_supabase_repo()
-    prepare_supabase_env()
 
     # Generate SearXNG secret key and check docker-compose.yml
     generate_searxng_secret_key()
     check_and_fix_docker_compose_for_searxng()
 
+    # Stop existing containers
     stop_existing_containers(args.profile)
 
-    # Start Supabase first
-    start_supabase(args.environment)
+    # Start all services
+    start_services(args.profile, args.environment, args.memory_optimized)
 
-    # Give Supabase some time to initialize
-    print("Waiting for Supabase to initialize...")
-    time.sleep(10)
-
-    # Then start the local AI services
-    start_local_ai(args.profile, args.environment)
+    print("\n" + "="*60)
+    print("Local AI stack started successfully!")
+    if args.memory_optimized:
+        print("Memory optimization: ENABLED (resource limits applied)")
+    print("="*60)
+    print("\nServices are starting up. Please wait a few moments for PostgreSQL")
+    print("to initialize before accessing other services.")
+    print("\nAccess services at:")
+    if args.environment == "private":
+        print("  - n8n: http://localhost:5678")
+        print("  - Open WebUI: http://localhost:8080")
+        print("  - Flowise: http://localhost:3001")
+        print("  - Langfuse: http://localhost:3000")
+        print("  - Neo4j Browser: http://localhost:7474")
+        print("  - PostgreSQL: localhost:5432")
+    else:
+        print("  - Services available via Caddy reverse proxy on ports 80/443")
+    print("\n" + "="*60)
 
 if __name__ == "__main__":
     main()
