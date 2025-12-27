@@ -184,6 +184,95 @@ def check_and_fix_docker_compose_for_searxng():
     except Exception as e:
         print(f"Error checking/modifying docker-compose.yml for SearXNG: {e}")
 
+def load_env_file(filepath=".env"):
+    """Parse .env file and return dict of values."""
+    env = {}
+    try:
+        with open(filepath, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, _, value = line.partition('=')
+                    env[key.strip()] = value.strip()
+    except FileNotFoundError:
+        print(f"Warning: {filepath} not found")
+    return env
+
+def ensure_additional_databases():
+    """Check and create any missing databases from POSTGRES_ADDITIONAL_DBS."""
+    print("\n" + "-"*60)
+    print("Checking for additional databases...")
+    print("-"*60)
+
+    # Load .env file
+    env = load_env_file()
+    additional_dbs = env.get("POSTGRES_ADDITIONAL_DBS", "")
+    postgres_user = env.get("POSTGRES_USER", "postgres")
+
+    if not additional_dbs:
+        print("No additional databases configured in POSTGRES_ADDITIONAL_DBS")
+        return
+
+    # Parse comma-separated list
+    requested_dbs = [db.strip() for db in additional_dbs.split(",") if db.strip()]
+
+    print(f"Configured databases: {requested_dbs}")
+
+    # Wait for postgres to be ready
+    print("Waiting for PostgreSQL to be ready...")
+    max_retries = 30
+    for i in range(max_retries):
+        result = subprocess.run(
+            ["docker", "exec", "postgres", "pg_isready", "-U", postgres_user],
+            capture_output=True
+        )
+        if result.returncode == 0:
+            print("PostgreSQL is ready!")
+            break
+        time.sleep(1)
+    else:
+        print("Warning: PostgreSQL not ready after 30 seconds, skipping database check")
+        return
+
+    # Get list of existing databases
+    result = subprocess.run(
+        ["docker", "exec", "postgres", "psql", "-U", postgres_user, "-t", "-c",
+         "SELECT datname FROM pg_database WHERE datistemplate = false;"],
+        capture_output=True, text=True
+    )
+    existing_dbs = [db.strip() for db in result.stdout.split("\n") if db.strip()]
+
+    # Create missing databases
+    created_count = 0
+    for db in requested_dbs:
+        if db not in existing_dbs:
+            print(f"Creating missing database: {db}")
+            try:
+                subprocess.run(
+                    ["docker", "exec", "postgres", "psql", "-U", postgres_user, "-c",
+                     f'CREATE DATABASE "{db}";'],
+                    check=True, capture_output=True
+                )
+                # Add extensions
+                subprocess.run(
+                    ["docker", "exec", "postgres", "psql", "-U", postgres_user, "-d", db, "-c",
+                     "CREATE EXTENSION IF NOT EXISTS vector; "
+                     "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"; "
+                     "CREATE EXTENSION IF NOT EXISTS pg_trgm;"],
+                    check=True, capture_output=True
+                )
+                print(f"  -> Database '{db}' created with AI extensions (vector, uuid-ossp, pg_trgm)")
+                created_count += 1
+            except subprocess.CalledProcessError as e:
+                print(f"  -> Error creating database '{db}': {e}")
+        else:
+            print(f"Database '{db}' already exists - skipping")
+
+    if created_count > 0:
+        print(f"\nCreated {created_count} new database(s)")
+    else:
+        print("\nAll configured databases already exist")
+
 def main():
     parser = argparse.ArgumentParser(description='Start the local AI services.')
     parser.add_argument('--profile', choices=['cpu', 'gpu-nvidia', 'gpu-amd', 'none'], default='cpu',
@@ -203,6 +292,9 @@ def main():
 
     # Start all services
     start_services(args.profile, args.environment, args.memory_optimized)
+
+    # Ensure all additional databases exist (creates missing ones only)
+    ensure_additional_databases()
 
     print("\n" + "="*60)
     print("Local AI stack started successfully!")
