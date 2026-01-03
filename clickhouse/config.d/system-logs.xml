@@ -1,0 +1,51 @@
+<clickhouse>
+    <!-- Limit system logs to prevent disk bloat -->
+
+    <!-- Trace log - keep 3 days max -->
+    <trace_log>
+        <database>system</database>
+        <table>trace_log</table>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </trace_log>
+
+    <!-- Text log - keep 3 days max -->
+    <text_log>
+        <database>system</database>
+        <table>text_log</table>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </text_log>
+
+    <!-- Query log - keep 7 days -->
+    <query_log>
+        <database>system</database>
+        <table>query_log</table>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+    </query_log>
+
+    <!-- Part log - keep 3 days -->
+    <part_log>
+        <database>system</database>
+        <table>part_log</table>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </part_log>
+
+    <!-- Metric log - keep 3 days -->
+    <metric_log>
+        <database>system</database>
+        <table>metric_log</table>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </metric_log>
+
+    <!-- Asynchronous metric log - keep 3 days -->
+    <asynchronous_metric_log>
+        <database>system</database>
+        <table>asynchronous_metric_log</table>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </asynchronous_metric_log>
+</clickhouse>
