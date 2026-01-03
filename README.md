@@ -128,63 +128,72 @@ Before running the services, you need to set up your environment variables.
 
 ---
 
-The project includes a `start_services.py` script that handles starting all AI services with proper initialization. The script accepts a `--profile` flag to specify which GPU configuration to use.
+The project includes a `start_services.py` script that handles starting services with proper initialization. The script supports modular profiles to run only what you need.
 
-### For Nvidia GPU users
+### Service Profiles
+
+**Core services** (always running, no profile needed):
+- PostgreSQL, Redis, Qdrant, Neo4j, SearXNG, Caddy
+
+**Optional profiles** (add with `--profile`):
+| Profile | What it adds |
+|---------|--------------|
+| `gpu-nvidia` | Ollama (NVIDIA GPU) + Open WebUI |
+| `gpu-amd` | Ollama (AMD GPU) + Open WebUI |
+| `cpu` | Ollama (CPU only) + Open WebUI |
+| `n8n` | n8n workflow automation |
+| `flowise` | Flowise no-code AI builder |
+| `langfuse` | Langfuse LLM observability |
+
+### Usage Examples
 
 ```bash
+# Core services only (databases + utilities)
+python start_services.py
+
+# Core + Ollama with Nvidia GPU
 python start_services.py --profile gpu-nvidia
+
+# Core + Langfuse (for LLM observability)
+python start_services.py --profile langfuse
+
+# Core + Ollama + n8n + Langfuse (combine profiles)
+python start_services.py --profile gpu-nvidia --profile n8n --profile langfuse
+
+# For AMD GPU users on Linux
+python start_services.py --profile gpu-amd
+
+# For CPU only (no GPU)
+python start_services.py --profile cpu
 ```
 
 > [!NOTE]
 > If you have not used your Nvidia GPU with Docker before, please follow the
 > [Ollama Docker instructions](https://github.com/ollama/ollama/blob/main/docs/docker.md).
 
-### For AMD GPU users on Linux
-
-```bash
-python start_services.py --profile gpu-amd
-```
-
 ### For Mac / Apple Silicon users
 
-If you're using a Mac with an M1 or newer processor, you can't expose your GPU to the Docker instance, unfortunately. There are two options in this case:
+If you're using a Mac with an M1 or newer processor, you can't expose your GPU to the Docker instance. Options:
 
-1. Run the starter kit fully on CPU:
+1. Run without Ollama (core services only), and run Ollama natively on Mac:
+   ```bash
+   python start_services.py
+   ```
+
+2. Run Ollama on CPU inside Docker:
    ```bash
    python start_services.py --profile cpu
    ```
 
-2. Run Ollama on your Mac for faster inference, and connect to that from the n8n instance:
-   ```bash
-   python start_services.py --profile none
-   ```
+If running Ollama natively on Mac, check the [Ollama homepage](https://ollama.com/) for installation instructions.
 
-   If you want to run Ollama on your mac, check the [Ollama homepage](https://ollama.com/) for installation instructions.
+#### For Mac users running Ollama locally
 
-#### For Mac users running OLLAMA locally
-
-If you're running OLLAMA locally on your Mac (not in Docker), you need to modify the OLLAMA_HOST environment variable in the n8n service configuration. Update the x-n8n section in your Docker Compose file as follows:
-
-```yaml
-x-n8n: &service-n8n
-  # ... other configurations ...
-  environment:
-    # ... other environment variables ...
-    - OLLAMA_HOST=host.docker.internal:11434
-```
-
-Additionally, after you see "Editor is now accessible via: http://localhost:5678/":
+If you're running Ollama locally on your Mac (not in Docker), update n8n credentials to connect:
 
 1. Head to http://localhost:5678/home/credentials
 2. Click on "Local Ollama service"
 3. Change the base URL to "http://host.docker.internal:11434/"
-
-### For everyone else
-
-```bash
-python start_services.py --profile cpu
-```
 
 ### The environment argument
 The **start-services.py** script offers the possibility to pass one of two options for the environment argument, **private** (default environment) and **public**:
@@ -308,18 +317,18 @@ To update all containers to their latest versions (n8n, Open WebUI, etc.), run t
 
 ```bash
 # Stop all services
-docker compose -p localai -f docker-compose.yml --profile <your-profile> down
+docker compose -p localai down
 
-# Pull latest versions of all containers
-docker compose -p localai -f docker-compose.yml --profile <your-profile> pull
+# Pull latest versions (add --profile flags for optional services you use)
+docker compose -p localai -f docker-compose.yml pull
+docker compose -p localai -f docker-compose.yml --profile gpu-nvidia pull  # if using Ollama
+docker compose -p localai -f docker-compose.yml --profile langfuse pull    # if using Langfuse
 
-# Start services again with your desired profile
-python start_services.py --profile <your-profile>
+# Start services again with your desired profiles
+python start_services.py --profile gpu-nvidia --profile langfuse
 ```
 
-Replace `<your-profile>` with one of: `cpu`, `gpu-nvidia`, `gpu-amd`, or `none`.
-
-Note: The `start_services.py` script itself does not update containers - it only restarts them or pulls them if you are downloading these containers for the first time. To get the latest versions, you must explicitly run the commands above.
+Note: The `start_services.py` script itself does not update containers - it only restarts them or pulls them if you are downloading these containers for the first time. To get the latest versions, you must explicitly run the pull commands above.
 
 ## Database Backups
 

@@ -14,24 +14,39 @@ All services run under a unified Docker Compose project named "localai" with a s
 
 ### Starting Services
 
-The primary entry point is `start_services.py` which handles both stacks:
+The primary entry point is `start_services.py` which supports modular profiles for different service combinations:
 
 ```bash
-# For Nvidia GPU
+# Core services only (databases + utilities, no Ollama)
+python start_services.py
+
+# Core + Ollama with Nvidia GPU + Open WebUI
 python start_services.py --profile gpu-nvidia
 
-# For AMD GPU (Linux only)
+# Core + Ollama with AMD GPU + Open WebUI
 python start_services.py --profile gpu-amd
 
-# For CPU only
+# Core + Ollama on CPU + Open WebUI
 python start_services.py --profile cpu
 
-# For Mac users running Ollama locally
-python start_services.py --profile none
+# Core + Langfuse (LLM observability)
+python start_services.py --profile langfuse
+
+# Core + n8n (workflow automation)
+python start_services.py --profile n8n
+
+# Core + Flowise (no-code AI builder)
+python start_services.py --profile flowise
+
+# Combine multiple profiles
+python start_services.py --profile gpu-nvidia --profile langfuse --profile n8n
 
 # For production/public deployment
-python start_services.py --profile <profile> --environment public
+python start_services.py --profile gpu-nvidia --environment public
 ```
+
+**Core services** (always running, no profile needed):
+- PostgreSQL, Redis, Qdrant, Neo4j, SearXNG, Caddy
 
 **Important**: The script automatically:
 - Generates SearXNG secret keys
@@ -41,22 +56,31 @@ python start_services.py --profile <profile> --environment public
 ### Stopping Services
 
 ```bash
-# Stop all services (replace <profile> with cpu/gpu-nvidia/gpu-amd/none)
-docker compose -p localai -f docker-compose.yml --profile <profile> down
+# Stop all services
+docker compose -p localai down
 
 # Stop and remove all volumes (WARNING: deletes all data)
-docker compose -p localai -f docker-compose.yml --profile <profile> down -v
+docker compose -p localai down -v
 ```
 
 ### Upgrading Containers
 
 ```bash
-# Pull latest versions
-docker compose -p localai -f docker-compose.yml --profile <profile> pull
+# Stop services
+docker compose -p localai down
 
-# Restart with updated images
-python start_services.py --profile <profile>
+# Pull latest versions (include all profiles you use)
+docker compose -p localai -f docker-compose.yml --profile langfuse pull
+# Or with multiple profiles:
+docker compose -p localai -f docker-compose.yml --profile gpu-nvidia --profile langfuse pull
+
+# Restart with your profiles
+python start_services.py --profile langfuse
+# Or with multiple profiles:
+python start_services.py --profile gpu-nvidia --profile langfuse
 ```
+
+Note: The pull command with a profile pulls both core services AND that profile's services.
 
 ### Viewing Logs
 
@@ -142,14 +166,35 @@ The project uses a multi-file Docker Compose setup:
 
 ### Service Profiles
 
-Services use Docker Compose profiles to support different GPU configurations:
+Services use Docker Compose profiles for modular deployment:
 
-- **`cpu`**: Uses `ollama-cpu` service
-- **`gpu-nvidia`**: Uses `ollama-gpu` with NVIDIA GPU reservations
-- **`gpu-amd`**: Uses `ollama-gpu-amd` with ROCm image
-- **`none`**: No Ollama container (for Mac users running Ollama natively)
+**Core Services** (always running, no profile needed):
+- `postgres` - PostgreSQL database with pgvector
+- `redis` - Redis/Valkey cache and queue
+- `qdrant` - Vector database
+- `neo4j` - Graph database
+- `searxng` - Web search engine
+- `caddy` - Reverse proxy
 
-Each profile includes a corresponding `ollama-pull-llama-*` service that automatically downloads the default model (`qwen2.5:7b-instruct-q4_K_M`) and embedding model (`nomic-embed-text`) on first run.
+**Ollama Profiles** (GPU selection):
+- **`cpu`**: Ollama on CPU + Open WebUI
+- **`gpu-nvidia`**: Ollama with NVIDIA GPU + Open WebUI
+- **`gpu-amd`**: Ollama with AMD GPU (ROCm) + Open WebUI
+
+**Optional Service Profiles**:
+- **`n8n`**: n8n workflow automation
+- **`flowise`**: Flowise no-code AI builder
+- **`langfuse`**: Langfuse observability (includes ClickHouse + MinIO)
+
+Each Ollama profile includes a corresponding `ollama-pull-llama-*` service that automatically downloads the default model (`qwen2.5:7b-instruct-q4_K_M`) and embedding model (`nomic-embed-text`) on first run.
+
+**Profile Examples**:
+| Command | Services Started |
+|---------|------------------|
+| `python start_services.py` | Core only (6 services) |
+| `python start_services.py --profile gpu-nvidia` | Core + Ollama + Open WebUI |
+| `python start_services.py --profile langfuse` | Core + Langfuse stack |
+| `python start_services.py --profile gpu-nvidia --profile langfuse` | Core + Ollama + Langfuse |
 
 ### Key Services
 

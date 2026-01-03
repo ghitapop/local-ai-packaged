@@ -17,23 +17,27 @@ def run_command(cmd, cwd=None):
     print("Running:", " ".join(cmd))
     subprocess.run(cmd, cwd=cwd, check=True)
 
-def stop_existing_containers(profile=None):
+def stop_existing_containers(profiles=None):
     """Stop and remove existing containers."""
     print("Stopping and removing existing containers for project 'localai'...")
     cmd = ["docker", "compose", "-p", "localai"]
-    if profile and profile != "none":
-        cmd.extend(["--profile", profile])
+    if profiles:
+        for profile in profiles:
+            if profile != "none":
+                cmd.extend(["--profile", profile])
     cmd.extend(["-f", "docker-compose.yml", "down"])
     run_command(cmd)
 
-def start_services(profile=None, environment=None, memory_optimized=False):
+def start_services(profiles=None, environment=None, memory_optimized=False):
     """Start all local AI services."""
     print("Starting local AI services...")
     if memory_optimized:
         print("Memory optimization enabled - applying resource limits")
     cmd = ["docker", "compose", "-p", "localai"]
-    if profile and profile != "none":
-        cmd.extend(["--profile", profile])
+    if profiles:
+        for profile in profiles:
+            if profile != "none":
+                cmd.extend(["--profile", profile])
     cmd.extend(["-f", "docker-compose.yml"])
     if environment and environment == "private":
         cmd.extend(["-f", "docker-compose.override.private.yml"])
@@ -275,29 +279,36 @@ def ensure_additional_databases():
 
 def main():
     parser = argparse.ArgumentParser(description='Start the local AI services.')
-    parser.add_argument('--profile', choices=['cpu', 'gpu-nvidia', 'gpu-amd', 'none'], default='cpu',
-                      help='Profile to use for Docker Compose (default: cpu)')
+    parser.add_argument('--profile', action='append', dest='profiles',
+                      help='Profiles to use for Docker Compose. Can be specified multiple times. '
+                           'Options: none, cpu, gpu-nvidia, gpu-amd (for Ollama), '
+                           'n8n, flowise, langfuse (for optional services). Default: none')
     parser.add_argument('--environment', choices=['private', 'public'], default='private',
                       help='Environment to use for Docker Compose (default: private)')
     parser.add_argument('--memory-optimized', action='store_true',
                       help='Apply memory limits to reduce RAM usage (recommended for systems with limited memory)')
     args = parser.parse_args()
 
+    # Default to 'none' if no profiles specified
+    if not args.profiles:
+        args.profiles = ['none']
+
     # Generate SearXNG secret key and check docker-compose.yml
     generate_searxng_secret_key()
     check_and_fix_docker_compose_for_searxng()
 
     # Stop existing containers
-    stop_existing_containers(args.profile)
+    stop_existing_containers(args.profiles)
 
     # Start all services
-    start_services(args.profile, args.environment, args.memory_optimized)
+    start_services(args.profiles, args.environment, args.memory_optimized)
 
     # Ensure all additional databases exist (creates missing ones only)
     ensure_additional_databases()
 
     print("\n" + "="*60)
     print("Local AI stack started successfully!")
+    print(f"Active profiles: {', '.join(args.profiles)}")
     if args.memory_optimized:
         print("Memory optimization: ENABLED (resource limits applied)")
     print("="*60)
